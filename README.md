@@ -10,3 +10,6 @@ Vous pouvez retrouver Uvid a l'adresse suivante :  [UVID](https://uvid-maxime-de
 ## Backend
 - Express 
 - Socket.io
+
+
+Pour les nécessiter de rendu sur Heroku le code present ne fonctionne que en HTTPS il sera donc impossible de l'utilisé en local sans decommenter la ligne 8 dans VideoChat.jsx
