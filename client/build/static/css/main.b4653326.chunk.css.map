@@ -1,0 +1,1 @@
+{"version":3,"sources":["App.css"],"names":[],"mappings":"AAAA,KACE,iBACF,CAEA,MACE,SACF","file":"main.b4653326.chunk.css","sourcesContent":[".App {\n  text-align: center;\n}\n\nvideo {\n  width: 25%;\n}\n"]}

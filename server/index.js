@@ -1,26 +1,12 @@
 const express = require('express');
 const path = require('path');
-const cluster = require('cluster');
-const numCPUs = require('os').cpus().length;
 
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 5000;
 
-// Multi-process to utilize all CPU cores.
-if (!isDev && cluster.isMaster) {
-  console.error(`Node cluster master ${process.pid} is running`);
-
-  // Fork workers.
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
-
-  cluster.on('exit', (worker, code, signal) => {
-    console.error(`Node cluster worker ${worker.process.pid} exited: code ${code}, signal ${signal}`);
-  });
-
-} else {
-  const app = express();
+const app = express();
+var server = require('http').Server(app);
+var io = require('socket.io')(server);
 
   // Priority serve any static files.
   app.use(express.static(path.resolve(__dirname, '../client/build')));
@@ -33,10 +19,61 @@ if (!isDev && cluster.isMaster) {
 
   // All remaining requests return the React app, so it can handle routing.
   app.get('*', function(request, response) {
-    response.sendFile(path.resolve(__dirname, '../react-ui/build', 'index.html'));
+    response.sendFile(path.resolve(__dirname, '../client/build', 'index.html'));
   });
 
-  app.listen(PORT, function () {
+server.listen(PORT, function () {
     console.error(`Node ${isDev ? 'dev server' : 'cluster worker '+process.pid}: listening on port ${PORT}`);
   });
-}
+
+var group = [];
+
+io.on('connection', socket => {
+
+  socket.on('join', (data, callback) => {
+    socket.join(data.roomId);
+    socket.room = data.roomId;
+    if (group[data.roomId] === undefined)
+      group[data.roomId] = { name:data.roomId, users: []};
+    const sockets = io.of('/').in().adapter.rooms[data.roomId];
+    callback(group[data.roomId]);
+  })
+
+  socket.on('getAllUsers', (data, callback) => {
+    const roomId =  data.roomId;
+    callback(group[roomId])
+  })
+
+  socket.on('addUser', (data, callback) => {
+    group[data.roomId].users.push({socketId: socket.id});
+    callback(group[data.roomId]);
+  })
+
+  socket.on('updateUser', data => {
+    const roomId = data.roomId;
+
+    console.log(group);
+
+    let index = group[roomId].users.findIndex(a => {
+      return a.socketId === socket.id
+    })
+
+    group[roomId].users[index].peer = data.peer;
+    group[roomId].users[index].index = data.index;
+  })
+
+  socket.on('connectToPeer', data => {
+    socket.to(data.socket).emit('connectToPeer', {peer: data.peer, socket: socket.id, index: data.index})
+  })
+
+  socket.on('finalHandshake', data => {
+    socket.to(data.socket).emit('finalHandshake', {peer: data.peer, index: data.index})
+  })
+
+  socket.on('disconnect', () => {
+    group.forEach((room, index, object) => {
+      if(room.users.length === 0)
+        object.splice(index, 1);
+    })
+  })
+})
