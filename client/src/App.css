@@ -21,6 +21,22 @@
   width: 64px;
 }
 
+.videoContainer
+{
+  max-width: 33%;
+  display: inline-block;
+}
+
+.videoContainer video
+{
+  max-width: 100%;
+}
+
+.videoContainer h1
+{
+  text-align: center;
+}
+
 #ownVideo {
   height: 180px;
   max-height: 100%;

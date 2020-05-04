@@ -45,14 +45,12 @@ io.on('connection', socket => {
   })
 
   socket.on('addUser', (data, callback) => {
-    group[data.roomId].users.push({socketId: socket.id});
+    group[data.roomId].users.push({socketId: socket.id, username: data.username});
     callback(group[data.roomId]);
   })
 
   socket.on('updateUser', data => {
     const roomId = data.roomId;
-
-    console.log(group);
 
     let index = group[roomId].users.findIndex(a => {
       return a.socketId === socket.id
@@ -63,11 +61,11 @@ io.on('connection', socket => {
   })
 
   socket.on('connectToPeer', data => {
-    socket.to(data.socket).emit('connectToPeer', {peer: data.peer, socket: socket.id, index: data.index})
+    socket.to(data.socket).emit('connectToPeer', {peer: data.peer, socket: socket.id, index: data.index, username: data.username})
   })
 
   socket.on('finalHandshake', data => {
-    socket.to(data.socket).emit('finalHandshake', {peer: data.peer, index: data.index})
+    socket.to(data.socket).emit('finalHandshake', {peer: data.peer, index: data.index, username: data.username})
   })
 
   socket.on('disconnect', () => {

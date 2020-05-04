@@ -5,7 +5,7 @@ import {ShareScreenIcon,MicOnIcon,MicOffIcon,CamOnIcon,CamOffIcon} from '../Icon
 import {Col, Row} from "antd";
 
 const PORT = process.env.PORT || 5000;
-//const socket = openSocket(`https://${window.location.hostname}:${PORT}`, {secure: true});
+//const socket = openSocket(`http://${window.location.hostname}:${PORT}`, {secure: false});
 const socket = openSocket(`https://${window.location.hostname}`, {secure: true});
 
 
@@ -17,6 +17,7 @@ export default class Videochat extends Component {
       ownPeer: '',
       localPeer:{},
       localStream: {},
+      remoteStreams: [],
       remoteStreamUrl: '',
       streamUrl: '',
       initiator: false,
@@ -43,8 +44,9 @@ export default class Videochat extends Component {
       this.updatePeer();
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true, }).then(stream => {
         var video = document.createElement("video");
-        this.setState({ streamUrl: stream, localStream: stream });
-        this.localVideo.srcObject = stream;
+        let streams = this.state.remoteStreams;
+        streams.push(stream)
+        this.setState({remoteStream : streams});
         let peer = new Peer({
           initiator: false,
           trickle: false,
@@ -56,11 +58,18 @@ export default class Videochat extends Component {
         peer.on('signal', peer => {
           if (peer.renegotiate) return
           peer = JSON.stringify(peer)
-          socket.emit('finalHandshake', { peer, index: data.index, socket: data.socket })
+          socket.emit('finalHandshake', { peer, index: data.index, socket: data.socket, username: this.props.location.state.username })
         })
 
         peer.on('stream', stream => {
-          document.querySelector('#videos').appendChild(video)
+          let div = document.createElement("div")
+          div.className = "videoContainer";
+          let name = document.createElement("h1")
+          name.innerHTML = data.username;
+          var video = document.createElement("video");
+          div.appendChild(video);
+          div.appendChild(name)
+          document.querySelector('#videos').appendChild(div)
           video.srcObject = stream;
           video.onloadedmetadata = function (e) {
             video.play();
@@ -84,8 +93,14 @@ export default class Videochat extends Component {
       peer.signal(JSON.parse(data.peer));
 
       peer.on('stream', stream => {
+        let div = document.createElement("div")
+        div.className = "videoContainer";
+        let name = document.createElement("h1")
+        name.innerHTML = data.username;
         var video = document.createElement("video");
-        document.querySelector('#videos').appendChild(video)
+        div.appendChild(video);
+        div.appendChild(name)
+        document.querySelector('#videos').appendChild(div)
         video.srcObject = stream;
         video.onloadedmetadata = function (e) {
           video.play();
@@ -97,8 +112,8 @@ export default class Videochat extends Component {
 
 
 
-    socket.emit('join', { roomId: roomId }, ( group ) => {
-      socket.emit('addUser', { roomId: roomId }, () => {
+    socket.emit('join', { roomId: roomId, username: this.props.location.state.username }, ( group ) => {
+      socket.emit('addUser', { roomId: roomId, username: this.props.location.state.username }, () => {
         this.getAllUsers()
       })
     })
@@ -106,13 +121,14 @@ export default class Videochat extends Component {
 
   getAllUsers() {
     const { roomId } = this.props.match.params;
-    socket.emit('getAllUsers', { roomId: roomId } , group => {
+    socket.emit('getAllUsers', { roomId: roomId, username: this.props.location.state.username } , group => {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true, }).then(stream => {
-        this.setState({ streamUrl: stream, localStream: stream });
-        this.localVideo.srcObject = stream;
         group.users.forEach(user => {
           // DO NOT CONNECT WITH YOURSELF
           if (user.socketId === socket.id) return;
+          let streams = this.state.remoteStreams;
+          streams.push(stream)
+          this.setState({remoteStream : streams});
           let peer = new Peer({
             initiator: true,
             trickle: false,
@@ -125,7 +141,7 @@ export default class Videochat extends Component {
               this.state.peers[index].on('signal', data => {
                 let peerId = JSON.stringify(data);
                 this.setState({ ownPeer: peerId })
-                socket.emit('connectToPeer', { peer: peerId, index, socket: user.socketId })
+                socket.emit('connectToPeer', { peer: peerId, index, socket: user.socketId , username: this.props.location.state.username})
               })
             });
 
@@ -165,6 +181,13 @@ export default class Videochat extends Component {
   }
 
   setAudioLocal(){
+    this.state.remoteStreams.forEach((stream) => {
+      if(stream.getAudioTracks().length>0){
+        stream.getAudioTracks().forEach(track => {
+          track.enabled=!track.enabled;
+        });
+      }
+    })
     if(this.state.localStream.getAudioTracks().length>0){
       this.state.localStream.getAudioTracks().forEach(track => {
         track.enabled=!track.enabled;
@@ -176,6 +199,13 @@ export default class Videochat extends Component {
   }
 
   setVideoLocal(){
+    this.state.remoteStreams.forEach((stream) => {
+      if(stream.getVideoTracks().length>0){
+        stream.getVideoTracks().forEach(track => {
+          track.enabled=!track.enabled;
+        });
+      }
+    })
     if(this.state.localStream.getVideoTracks().length>0){
       this.state.localStream.getVideoTracks().forEach(track => {
         track.enabled=!track.enabled;
@@ -189,14 +219,22 @@ export default class Videochat extends Component {
   getDisplay() {
     navigator.mediaDevices.getDisplayMedia().then(stream => {
       stream.oninactive = () => {
-        this.state.localPeer.removeStream(this.state.localStream);
+        this.state.peers.forEach((peer) => {
+          peer.removeStream(this.state.localStream);
+        });
         this.getUserMedia().then(() => {
-          this.state.localPeer.addStream(this.state.localStream);
+          this.state.peers.forEach((peer) => {
+            peer.addStream(this.state.localStream);
+          });
         });
       };
-      this.setState({ streamUrl: stream, localStream: stream });
-      this.localVideo.srcObject = stream;
-      this.state.localPeer.addStream(stream);
+      this.setState({ streamUrl: stream, localStream: stream }, () => {
+        this.localVideo.srcObject = stream;
+        this.state.peers.forEach((peer) => {
+          peer.addStream(this.state.localStream);
+        })
+      });
+
     });
   }
 
@@ -206,7 +244,6 @@ export default class Videochat extends Component {
       peers.push(peer);
 
       this.setState({ peers: peers }, () => {
-        console.log(this.state.peers);
         resolve(peers.length - 1);
       })
     })
@@ -249,16 +286,6 @@ export default class Videochat extends Component {
           </Col>
         </Row>
         <div className='controls'>
-          <button
-              className='control-btn'
-              onClick={() => {
-                this.getDisplay();
-              }}
-          >
-            <ShareScreenIcon />
-          </button>
-
-
           <button
               className='control-btn'
               onClick={() => {
