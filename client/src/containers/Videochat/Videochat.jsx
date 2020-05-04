@@ -5,7 +5,7 @@ import {ShareScreenIcon,MicOnIcon,MicOffIcon,CamOnIcon,CamOffIcon} from '../Icon
 import {Col, Row} from "antd";
 
 const PORT = process.env.PORT || 5000;
-const socket = openSocket(`http://${window.location.hostname}:${PORT}`, {secure: false});
+const socket = openSocket(`https://${window.location.hostname}:${PORT}`, {secure: true});
 
 
 
